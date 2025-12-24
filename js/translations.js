@@ -4,31 +4,45 @@ import { la } from './utils.js';
 import { Storage } from './storage.js';
 
 // Alphabetical order
+// Браузерные коды - основные для отображения в UI
+// Electron-коды добавлены как псевдонимы (aliases)
 const available_langs = {
-  "ar_ar": { "name": "العربية", "file": "ar_ar.json", "direction": "rtl"},
-  "bg_bg": { "name": "Български", "file": "bg_bg.json", "direction": "ltr"},
-  "cz_cz": { "name": "Čeština", "file": "cz_cz.json", "direction": "ltr"},
-  "da_dk": { "name": "Dansk", "file": "da_dk.json", "direction": "ltr"},
-  "de_de": { "name": "Deutsch", "file": "de_de.json", "direction": "ltr"},
-  "es_es": { "name": "Español", "file": "es_es.json", "direction": "ltr"},
-  "fa_fa": { "name": "فارسی", "file": "fa_fa.json", "direction": "rtl"},
-  "fr_fr": { "name": "Français", "file": "fr_fr.json", "direction": "ltr"},
-  "hu_hu": { "name": "Magyar", "file": "hu_hu.json", "direction": "ltr"},
-  "it_it": { "name": "Italiano", "file": "it_it.json", "direction": "ltr"},
-  "jp_jp": { "name": "日本語", "file": "jp_jp.json", "direction": "ltr"},
-  "ko_kr": { "name": "한국어", "file": "ko_kr.json", "direction": "ltr"},
-  "nl_nl": { "name": "Nederlands", "file": "nl_nl.json", "direction": "ltr"},
-  "pl_pl": { "name": "Polski", "file": "pl_pl.json", "direction": "ltr"},
-  "pt_br": { "name": "Português do Brasil", "file": "pt_br.json", "direction": "ltr"},
-  "pt_pt": { "name": "Português", "file": "pt_pt.json", "direction": "ltr"},
-  "rs_rs": { "name": "Srpski", "file": "rs_rs.json", "direction": "ltr"},
-  "ru_ru": { "name": "Русский", "file": "ru_ru.json", "direction": "ltr"},
-  "tr_tr": { "name": "Türkçe", "file": "tr_tr.json", "direction": "ltr"},
-  "ua_ua": { "name": "Українська", "file": "ua_ua.json", "direction": "ltr"},
-  "vi_vn": { "name": "Tiếng Việt", "file": "vi_vn.json", "direction": "ltr"},
-  "zh_cn": { "name": "中文", "file": "zh_cn.json", "direction": "ltr"},
-  "zh_tw": { "name": "中文(繁)", "file": "zh_tw.json", "direction": "ltr"}
+  "ar_ar": { "name": "العربية", "file": "ar_ar.json", "direction": "rtl", "aliases": ["ar"] },
+  "bg_bg": { "name": "Български", "file": "bg_bg.json", "direction": "ltr", "aliases": ["bg"] },
+  "cz_cz": { "name": "Čeština", "file": "cz_cz.json", "direction": "ltr", "aliases": ["cs"] },
+  "da_dk": { "name": "Dansk", "file": "da_dk.json", "direction": "ltr", "aliases": ["da"] },
+  "de_de": { "name": "Deutsch", "file": "de_de.json", "direction": "ltr", "aliases": ["de"] },
+  "es_es": { "name": "Español", "file": "es_es.json", "direction": "ltr", "aliases": ["es"] },
+  "fa_fa": { "name": "فارسی", "file": "fa_fa.json", "direction": "rtl", "aliases": ["fa"] },
+  "fr_fr": { "name": "Français", "file": "fr_fr.json", "direction": "ltr", "aliases": ["fr"] },
+  "hu_hu": { "name": "Magyar", "file": "hu_hu.json", "direction": "ltr", "aliases": ["hu"] },
+  "it_it": { "name": "Italiano", "file": "it_it.json", "direction": "ltr", "aliases": ["it"] },
+  "jp_jp": { "name": "日本語", "file": "jp_jp.json", "direction": "ltr", "aliases": ["ja"] },
+  "ko_kr": { "name": "한국어", "file": "ko_kr.json", "direction": "ltr", "aliases": ["ko"] },
+  "nl_nl": { "name": "Nederlands", "file": "nl_nl.json", "direction": "ltr", "aliases": ["nl"] },
+  "pl_pl": { "name": "Polski", "file": "pl_pl.json", "direction": "ltr", "aliases": ["pl"] },
+  "pt_br": { "name": "Português do Brasil", "file": "pt_br.json", "direction": "ltr", "aliases": [] },
+  "pt_pt": { "name": "Português", "file": "pt_pt.json", "direction": "ltr", "aliases": [] },
+  "rs_rs": { "name": "Srpski", "file": "rs_rs.json", "direction": "ltr", "aliases": ["sr"] },
+  "ru_ru": { "name": "Русский", "file": "ru_ru.json", "direction": "ltr", "aliases": ["ru"] },
+  "tr_tr": { "name": "Türkçe", "file": "tr_tr.json", "direction": "ltr", "aliases": ["tr"] },
+  "ua_ua": { "name": "Українська", "file": "ua_ua.json", "direction": "ltr", "aliases": ["uk"] },
+  "vi_vn": { "name": "Tiếng Việt", "file": "vi_vn.json", "direction": "ltr", "aliases": ["vi"] },
+  "zh_cn": { "name": "中文", "file": "zh_cn.json", "direction": "ltr", "aliases": [] },
+  "zh_tw": { "name": "中文(繁)", "file": "zh_tw.json", "direction": "ltr", "aliases": [] }
 };
+
+// Карта для быстрого поиска языка по любому коду (основному или алиасу)
+const lang_code_map = {};
+Object.keys(available_langs).forEach(browserCode => {
+  const lang = available_langs[browserCode];
+  // Добавляем основной код
+  lang_code_map[browserCode] = browserCode;
+  // Добавляем все алиасы
+  lang.aliases.forEach(alias => {
+    lang_code_map[alias] = browserCode;
+  });
+});
 
 // Translation state - will be imported from core.js app object
 let translationState = null;
@@ -58,21 +72,23 @@ export function lang_init(appState, handleLanguageChangeCb, welcomeModalCb) {
     });
   } else {
     const nlang = navigator.language.replace('-', '_').toLowerCase();
-    const ljson = available_langs[nlang];
-    if(ljson) {
+    // Ищем язык по коду (браузерному или electron)
+    const browserLang = lang_code_map[nlang];
+    if (browserLang) {
+      const langData = available_langs[browserLang];
       la("lang_init", {"l": nlang});
-      lang_translate(ljson["file"], nlang, ljson["direction"]).catch(error => {
+      lang_translate(langData["file"], browserLang, langData["direction"]).catch(error => {
         console.error("Failed to load initial language:", error);
       });
     }
   }
   
-  const langs = Object.keys(available_langs);
+  // Строим список только из браузерных кодов (без дубликатов)
   const olangs = [
     '<li><a class="dropdown-item" href="#" onclick="lang_set(\'en_us\');">English</a></li>',
-    ...langs.map(lang => {
-      const name = available_langs[lang]["name"];
-      return `<li><a class="dropdown-item" href="#" onclick="lang_set('${lang}');">${name}</a></li>`;
+    ...Object.keys(available_langs).map(browserCode => {
+      const name = available_langs[browserCode]["name"];
+      return `<li><a class="dropdown-item" href="#" onclick="lang_set('${browserCode}');">${name}</a></li>`;
     }),
     '<li><hr class="dropdown-divider"></li>',
     '<li><a class="dropdown-item" href="https://github.com/dualshock-tools/dualshock-tools.github.io/blob/main/TRANSLATIONS.md" target="_blank">Missing your language?</a></li>'
@@ -83,14 +99,21 @@ export function lang_init(appState, handleLanguageChangeCb, welcomeModalCb) {
 async function lang_set(lang, skip_modal=false) {
   la("lang_set", { l: lang });
   
+  // Преобразуем переданный код в браузерный код (если это electron-код)
+  const browserLang = lang_code_map[lang] || lang;
+  
   lang_reset_page();
-  if(lang != "en_us") {
-    const { file, direction } = available_langs[lang];
-    await lang_translate(file, lang, direction);
+  if(browserLang != "en_us") {
+    const langData = available_langs[browserLang];
+    if (langData) {
+      await lang_translate(langData["file"], browserLang, langData["direction"]);
+    } else {
+      console.error(`Language not found: ${lang} (browser: ${browserLang})`);
+    }
   }
   
-  await handleLanguageChange(lang);
-  Storage.setString("force_lang", lang);
+  await handleLanguageChange(browserLang);
+  Storage.setString("force_lang", browserLang);
   if(!skip_modal && welcomeModal) {
     Storage.setString("welcome_accepted", "0");
     welcomeModal();
