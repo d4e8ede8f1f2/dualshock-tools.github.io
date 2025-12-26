@@ -22,6 +22,7 @@
 #   python3 scripts/check_translations.py --verbose # Show excluded strings
 #   python3 scripts/check_translations.py --compact # Compact output (no language details)
 #   python3 scripts/check_translations.py --json    # Output in JSON format
+#   python3 scripts/check_translations.py --export-base  # Export found strings to lang/base.json
 
 import os
 import re
@@ -33,6 +34,7 @@ from pathlib import Path
 VERBOSE = '--verbose' in sys.argv or '-v' in sys.argv
 JSON_OUTPUT = '--json' in sys.argv
 COMPACT = '--compact' in sys.argv
+EXPORT_BASE = '--export-base' in sys.argv or '-e' in sys.argv
 
 # Directories to scan
 ROOT_DIR = Path(".")
@@ -100,6 +102,57 @@ WHITELIST_UNUSED = {
     "USB Connector",
 }
 
+def export_to_base_json(used_strings):
+    """Export all found strings to lang/base.json in specified format."""
+    base_file = LANG_DIR / "base.json"
+
+    # Read existing base.json if it exists
+    existing_data = {}
+    if base_file.exists():
+        try:
+            with open(base_file, 'r', encoding='utf-8') as f:
+                existing_data = json.load(f)
+        except Exception as e:
+            print(f"Error reading {base_file}: {e}")
+            existing_data = {}
+
+    # Create new data structure with special keys first, then used strings
+    new_data = {}
+
+    # Add special keys first
+    for key in sorted(SPECIAL_KEYS):
+        new_data[key] = existing_data.get(key, "")
+
+    # Add all used strings (sorted alphabetically)
+    for string in sorted(used_strings):
+        new_data[string] = existing_data.get(string, "")
+
+    # Add empty key at the end (for compatibility with existing format)
+    new_data[""] = existing_data.get("", "")
+
+    # Write to file
+    try:
+        with open(base_file, 'w', encoding='utf-8') as f:
+            json.dump(new_data, f, indent=2, ensure_ascii=False)
+        print(f"✅ Exported {len(used_strings)} strings + {len(SPECIAL_KEYS)} special keys to {base_file}")
+        print(f"   Total keys in file: {len(new_data)} (including empty key)")
+
+        # Show added strings
+        added_count = 0
+        for key in new_data:
+            if key not in existing_data and key != "":
+                added_count += 1
+                if VERBOSE:
+                    print(f"   + Added: \"{key}\"")
+
+        if added_count > 0 and not VERBOSE:
+            print(f"   Added {added_count} new strings")
+
+    except Exception as e:
+        print(f"Error writing {base_file}: {e}")
+        return False
+
+    return True
 
 def should_exclude_string(text):
     """Check if a string should be excluded from translation checks."""
@@ -125,48 +178,34 @@ def find_js_files():
 
 def extract_ds_i18n_strings(html_files):
     """Extract strings from elements with ds-i18n class in HTML files.
-
     Automatically ignores HTML comments (<!-- ... -->) before extraction.
     """
-    strings = {}  # Changed to dict to track locations
-
-    # Pattern to match elements with ds-i18n class and extract their content
-    # This handles various HTML structures including multi-line content
-    # Match opening tag with ds-i18n class, then capture content until closing tag
+    strings = {}
     pattern = r'<(\w+)[^>]*class="[^"]*ds-i18n[^"]*"[^>]*>(.*?)</\1>'
 
     for html_file in html_files:
         try:
             with open(html_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                lines = content.split('\n')
 
                 # Remove HTML comments before processing
-                # This regex handles both single-line and multi-line comments
                 content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
 
-                # Find all matches (DOTALL flag allows . to match newlines)
+                # Find all matches
                 matches = re.finditer(pattern, content, re.DOTALL)
                 for match in matches:
                     text = match.group(2)
 
                     # Skip if contains complex nested HTML tags
-                    # Allow simple formatting tags like <b>, <i>, <em>, <strong>, <span>
                     if '<' in text and '>' in text:
-                        # Check if it contains only simple formatting tags
-                        # Remove simple formatting tags temporarily to check for other HTML
                         text_without_simple_tags = re.sub(r'</?(?:b|i|em|strong|span)>', '', text)
                         if '<' in text_without_simple_tags:
-                            # Contains other HTML elements (complex content), skip it
                             continue
-                        # Otherwise, keep the original text with simple formatting tags
 
                     if text:
-                        # Calculate line and column number
                         line_num = content[:match.start()].count('\n') + 1
                         col_num = match.start() - content[:match.start()].rfind('\n')
-
-                        # Store location info
+                        
                         if text not in strings:
                             strings[text] = []
                         strings[text].append({
@@ -174,7 +213,6 @@ def extract_ds_i18n_strings(html_files):
                             'line': line_num,
                             'col': col_num
                         })
-
         except Exception as e:
             print(f"Error reading {html_file}: {e}")
 
@@ -182,15 +220,10 @@ def extract_ds_i18n_strings(html_files):
 
 def extract_l_function_strings(js_files):
     """Extract strings passed to l() function in JavaScript files.
-
     Automatically ignores JavaScript comments (// and /* ... */) before extraction.
     """
-    strings = {}  # Changed to dict to track locations
-
-    # Pattern to match l("string") or l('string') or this.l("string") or this.l('string')
-    # Handles both single and double quotes
-    # Use word boundary \b to ensure 'l' is not part of a larger word (e.g., .html)
-    pattern = r'(?:this\.)?\bl\s*\(\s*["\'`]([^"\'`]+)["\'`]\s*\)'
+    strings = {}
+    pattern = r'''(?:this\.)?\bl\s*\(\s*(["'`])((?:\\.|[^\\])*?)(?<!\\)\1\s*\)'''
 
     for js_file in js_files:
         try:
@@ -198,21 +231,19 @@ def extract_l_function_strings(js_files):
                 content = f.read()
 
                 # Remove JavaScript comments before processing
-                # Remove single-line comments (// ...)
                 content = re.sub(r'//.*?$', '', content, flags=re.MULTILINE)
-                # Remove multi-line comments (/* ... */)
                 content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
 
                 # Find all matches
-                matches = re.finditer(pattern, content)
+                matches = re.finditer(pattern, content, re.DOTALL)
                 for match in matches:
-                    text = match.group(1)
+                    text = match.group(2)
                     if text:
-                        # Calculate line and column number
+                        text = text.replace("\\'", "'").replace('\\"', '"').replace('\\\\', '\\')
+
                         line_num = content[:match.start()].count('\n') + 1
                         col_num = match.start() - content[:match.start()].rfind('\n')
 
-                        # Store location info
                         if text not in strings:
                             strings[text] = []
                         strings[text].append({
@@ -220,7 +251,6 @@ def extract_l_function_strings(js_files):
                             'line': line_num,
                             'col': col_num
                         })
-
         except Exception as e:
             print(f"Error reading {js_file}: {e}")
 
@@ -228,58 +258,43 @@ def extract_l_function_strings(js_files):
 
 def extract_html_strings_from_js(js_files):
     """Extract strings from HTML embedded in JavaScript files.
-
     This function looks for HTML strings in JavaScript that contain elements with ds-i18n class.
     Automatically ignores JavaScript comments (// and /* ... */) before extraction.
     """
-    strings = {}  # Dict to track locations
-
-    # Pattern to match elements with ds-i18n class in HTML strings
-    # This handles HTML within JavaScript strings (both single and double quotes)
+    strings = {}
     pattern = r'<(\w+)[^>]*class=["\'`][^"\'`]*ds-i18n[^"\'`]*["\'`][^>]*>(.*?)</\1>'
-
-    # Pattern to match template literal function calls like ${l('string')} or ${l("string")}
-    template_literal_pattern = r'\$\{l\s*\(\s*["\'`]([^"\'`]+)["\'`]\s*\)\}'
+    template_literal_pattern = r'''\$\{l\s*\(\s*(["'`])((?:\\.|[^\\])*?)(?<!\\)\1\s*\)\}'''
 
     for js_file in js_files:
         try:
             with open(js_file, 'r', encoding='utf-8') as f:
                 content = f.read()
-                original_content = content  # Keep original for line number calculation
+                original_content = content
 
                 # Remove JavaScript comments before processing
-                # Remove single-line comments (// ...)
                 content = re.sub(r'//.*?$', '', content, flags=re.MULTILINE)
-                # Remove multi-line comments (/* ... */)
                 content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
 
-                # Find all matches (DOTALL flag allows . to match newlines)
+                # Find all matches
                 matches = re.finditer(pattern, content, re.DOTALL)
                 for match in matches:
                     text = match.group(2)
 
-                    # Skip if contains complex nested HTML tags
-                    # Allow simple formatting tags like <b>, <i>, <em>, <strong>, <span>
                     if '<' in text and '>' in text:
-                        # Check if it contains only simple formatting tags
-                        # Remove simple formatting tags temporarily to check for other HTML
                         text_without_simple_tags = re.sub(r'</?(?:b|i|em|strong|span)>', '', text)
                         if '<' in text_without_simple_tags:
-                            # Contains other HTML elements (complex content), skip it
                             continue
-                        # Otherwise, keep the original text with simple formatting tags
 
                     if text:
-                        # Extract any template literal function calls like ${l('string')}
-                        template_matches = re.finditer(template_literal_pattern, text)
+                        # Extract template literal function calls
+                        template_matches = re.finditer(template_literal_pattern, text, re.DOTALL)
                         for template_match in template_matches:
-                            extracted_string = template_match.group(1)
+                            extracted_string = template_match.group(2)
                             if extracted_string:
-                                # Calculate line and column number using original content
+                                extracted_string = extracted_string.replace("\\'", "'").replace('\\"', '"').replace('\\\\', '\\')
                                 line_num = original_content[:match.start()].count('\n') + 1
                                 col_num = match.start() - original_content[:match.start()].rfind('\n')
 
-                                # Store location info
                                 if extracted_string not in strings:
                                     strings[extracted_string] = []
                                 strings[extracted_string].append({
@@ -288,14 +303,11 @@ def extract_html_strings_from_js(js_files):
                                     'col': col_num
                                 })
 
-                        # Also handle text that doesn't contain template literal patterns
-                        # (for backwards compatibility with non-template literal strings)
-                        if not re.search(template_literal_pattern, text):
-                            # Calculate line and column number using original content
+                        # Handle non-template literal strings
+                        if not re.search(template_literal_pattern, text, re.DOTALL):
                             line_num = original_content[:match.start()].count('\n') + 1
                             col_num = match.start() - original_content[:match.start()].rfind('\n')
-
-                            # Store location info
+                            
                             if text not in strings:
                                 strings[text] = []
                             strings[text].append({
@@ -303,23 +315,15 @@ def extract_html_strings_from_js(js_files):
                                 'line': line_num,
                                 'col': col_num
                             })
-
         except Exception as e:
             print(f"Error reading {js_file}: {e}")
 
     return strings
 
 def load_translation_keys():
-    """Load all translation keys from language files.
-
-    Returns:
-        tuple: (all_keys, keys_by_language)
-            - all_keys: set of all unique keys across all language files
-            - keys_by_language: dict mapping language code to set of keys in that language
-    """
+    """Load all translation keys from language files."""
     all_keys = set()
     keys_by_language = {}
-
     lang_files = list(LANG_DIR.glob("*.json"))
 
     if not lang_files:
@@ -329,22 +333,19 @@ def load_translation_keys():
     # Load keys from all language files
     for lang_file in lang_files:
         try:
-            # Extract language code from filename (e.g., "en_us" from "en_us.json")
             lang_code = lang_file.stem
 
             with open(lang_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 keys = set(data.keys())
-                keys.discard("")  # Remove empty string key if present
+                keys.discard("")
 
                 keys_by_language[lang_code] = keys
                 all_keys.update(keys)
         except Exception as e:
             print(f"Error reading {lang_file}: {e}")
 
-    # Remove empty string key if present
     all_keys.discard("")
-
     return all_keys, keys_by_language
 
 def main():
@@ -379,7 +380,6 @@ def main():
         print()
 
     # Combine all used strings and filter out excluded patterns
-    # Merge the three dictionaries, combining location lists for duplicate strings
     all_used_strings_with_locations = {}
     for text, locations in ds_i18n_strings.items():
         all_used_strings_with_locations[text] = locations.copy()
@@ -404,6 +404,11 @@ def main():
             for s in sorted(excluded_strings):
                 print(f"  - \"{s}\"")
         print()
+
+    # Check if we need to export to base.json
+    if EXPORT_BASE:
+        success = export_to_base_json(used_strings)
+        return 0 if success else 1
 
     # Load translation keys
     if not JSON_OUTPUT:
@@ -435,12 +440,10 @@ def main():
         missing_by_language[string] = sorted(missing_langs)
 
     # Find unused translations (in translation files but not used in code)
-    # Exclude whitelisted strings from unused check
     unused_translations = (translation_keys_for_comparison - used_strings) - WHITELIST_UNUSED
 
     # Output results
     if JSON_OUTPUT:
-        # Build missing translations with locations and missing languages
         missing_with_locations = []
         for string in sorted(missing_translations):
             entry = {
@@ -481,7 +484,6 @@ def main():
         print("-" * 80)
         for string in sorted(missing_translations):
             print(f"  - \"{string}\"")
-            # Show first location where this string was found (skip in compact mode)
             if not COMPACT and string in used_strings_with_locations:
                 locations = used_strings_with_locations[string]
                 if locations:
@@ -489,13 +491,11 @@ def main():
                     print(f"    → {loc['file']}:{loc['line']}:{loc['col']}")
                     if len(locations) > 1:
                         print(f"    (and {len(locations) - 1} more location{'s' if len(locations) > 2 else ''})")
-            # Show which languages are missing this translation (skip in compact mode)
             if not COMPACT and string in missing_by_language:
                 missing_langs = missing_by_language[string]
                 if len(missing_langs) == len(keys_by_language):
                     print(f"    Missing from: ALL languages ({len(missing_langs)})")
                 else:
-                    # Show first few languages, then count
                     if len(missing_langs) <= 5:
                         print(f"    Missing from: {', '.join(missing_langs)}")
                     else:
