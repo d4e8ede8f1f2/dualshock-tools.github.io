@@ -1,0 +1,240 @@
+$color-mode-type: media-query;
+
+$color_stick-card-active_header: white;
+$font-family: monospace;
+$background-color_stick-card-active_header: #0d6efd;
+$background-color_quickTestAccordion: #0c7dfd0d;
+
+
+@keyframes shake {
+	0%,100% {
+		transform: translateX(0);
+	}
+	10%,30%,50%,70%,90% {
+		transform: translateX(-2px);
+	}
+	20%,40%,60%,80% {
+		transform: translateX(2px);
+	}
+}
+
+@keyframes pulse {
+	0%,100% {
+		transform: scale(1);
+		opacity: 1;
+	}
+	50% {
+		transform: scale(1.1);
+		opacity: 0.8;
+	}
+}
+
+@keyframes bounce {
+	0%,20%,50%,80%,100% {
+		transform: translateY(0);
+	}
+	40% {
+		transform: translateY(-3px);
+	}
+	60% {
+		transform: translateY(-2px);
+	}
+}
+
+@keyframes glow {
+	0%,100% {
+		text-shadow: 0 0 5px rgba(13, 110, 253, 0.5);
+	}
+	50% {
+		text-shadow: 0 0 15px rgba(13, 110, 253, 0.8), 0 0 25px rgba(13, 110, 253, 0.6);
+	}
+}
+
+@keyframes blink {
+	0%,50% {
+		opacity: 1;
+	}
+	51%,100% {
+		opacity: 0.3;
+	}
+}
+
+@keyframes pulse-text {
+	0%,100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
+
+/* Set text color to red for internationalized elements */
+/* .ds-i18n {
+  color: red;
+} */
+
+body {
+	padding-bottom: 80px;
+}
+
+dl.row {
+	dt {
+		font-weight: normal;
+	}
+	dd {
+		font-family: $font-family;
+	}
+}
+
+#left-stick-card {
+	cursor: pointer;
+	outline: none !important;
+}
+
+#right-stick-card {
+	cursor: pointer;
+	outline: none !important;
+}
+
+.stick-card-active {
+	border: 1px solid #0d6efd !important;
+	box-shadow: 0 0 10px rgba(13, 110, 253, 0.3) !important;
+	.card-header {
+		background-color: $background-color_stick-card-active_header !important;
+		color: $color_stick-card-active_header !important;
+	}
+}
+
+.accordion-item {
+	&:has(.accordion-collapse.show) {
+		i.fas.test-icon-usb {
+			animation: pulse 1s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-buttons {
+			animation: bounce 0.6s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-imu {
+			animation: pulse 1s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-trackpad {
+			animation: pulse 1s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-haptic {
+			animation: shake 0.5s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-adaptive {
+			animation: pulse 1s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-speaker {
+			animation: bounce 0.6s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-microphone {
+			animation: glow 1.5s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-lights {
+			animation: glow 1.2s ease-in-out infinite !important;
+		}
+		i.fas.test-icon-headphone {
+			animation: pulse 1s ease-in-out infinite !important;
+		}
+	}
+}
+
+#quickTestAccordion {
+	.accordion-button {
+		padding: 0.5rem 1rem;
+	}
+	.accordion-collapse {
+		.accordion-body {
+			background-color: $background-color_quickTestAccordion;
+		}
+	}
+}
+
+.skip-btn {
+	opacity: 0;
+	transition: opacity 0.2s ease-in-out;
+}
+
+.accordion-header {
+	&:hover {
+		.skip-btn {
+			opacity: 1;
+		}
+	}
+}
+
+.blink-text {
+	animation: blink 1s infinite;
+}
+
+.pulsing-text {
+	animation: pulse-text 0.75s ease-in-out infinite;
+}
+
+/* Quick test check badges (IMU, trackpad): bold glyphs, stable pill width */
+.test-check {
+	font-weight: 900;
+	font-size: 0.85em;
+	min-width: 1.8em;
+}
+
+/* IMU test center-zero bar meters (Bootstrap vars follow data-bs-theme) */
+.imu-bar {
+	position: relative;
+	height: 4px;
+	margin-bottom: 4px;
+	background: var(--bs-border-color);
+	border-radius: 3px;
+
+	&::before {
+		/* center (zero) marker */
+		content: '';
+		position: absolute;
+		left: 50%;
+		top: -2px;
+		bottom: -2px;
+		width: 1px;
+		background: var(--bs-secondary-color);
+	}
+}
+
+.imu-bar-fill {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	border-radius: 3px;
+}
+
+/* VR2 button panel: pills light up light blue on capacitive touch and
+   dark blue while clicked */
+.vr2-btn {
+	/* Bootstrap theme variables follow data-bs-theme */
+	background-color: var(--bs-secondary-bg);
+	color: var(--bs-secondary-color);
+	font-size: 0.9rem;
+	transition: background-color 0.1s, color 0.1s;
+
+	&.touched {
+		background-color: #7ecbff; /* same light blue as the controller SVG body */
+		color: #0b3050;
+	}
+
+	&.pressed {
+		background-color: #1a237e; /* same dark blue as the SVG pressed infill */
+		color: #ffffff;
+	}
+}
+
+/* VR2 raw input report: one cell per byte, recently changed bytes highlighted */
+.vr2-raw-cell {
+	display: inline-block;
+	min-width: 2.6em;
+	text-align: center;
+	border-radius: 3px;
+}
+
+.vr2-raw-hot {
+	background-color: var(--bs-warning-bg-subtle);
+	color: var(--bs-warning-text-emphasis);
+}
